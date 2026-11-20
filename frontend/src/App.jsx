@@ -9,6 +9,20 @@ import {
 } from 'lucide-react'
 
 import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid
+} from 'recharts'
+
+import {
   analyzeImage,
   analyzeStroke,
   downloadReport,
@@ -24,6 +38,15 @@ const tasks = {
     'Brain tumour screening',
     'Stroke screening'
   ]
+}
+
+const CHART_COLORS = ['#3978d5', '#20a779', '#e5a348', '#8b70ce', '#e47777']
+
+const chartTooltipStyle = {
+  border: '1px solid #e8edf4',
+  borderRadius: '10px',
+  fontSize: '12px',
+  boxShadow: '0 5px 20px rgba(30,50,80,0.08)'
 }
 
 const nav = [
@@ -1071,33 +1094,153 @@ function AnalysisPage(p) {
           </div>
         </section>
 
-        <section className="content-card">
-          <div className="card-heading">
-            <div>
-              <span className="eyebrow">CLINICAL CONTEXT</span>
-              <h3>Precautionary guidance</h3>
-              <p>Safe information for the prototype workflow.</p>
-            </div>
-            <Stethoscope size={20} className="muted-icon" />
-          </div>
-
-          <div className="guidance-box">
-            <ShieldCheck size={19} />
-            <div>
-              <b>Research output only</b>
-              <p>
-                This application is not validated for clinical diagnosis.
-                Do not use its predictions or segmentation outputs to make
-                treatment decisions. A qualified clinician must interpret
-                medical images.
-              </p>
-            </div>
-          </div>
-        </section>
+        <ClinicalGuidance
+          task={p.task}
+          result={p.result}
+          isStrokeWorkflow={p.isStrokeWorkflow}
+        />
       </div>
 
       <SafetyStrip />
     </div>
+  )
+}
+
+/* DISEASE-SPECIFIC PRECAUTIONARY GUIDANCE */
+
+function ClinicalGuidance({ task, result, isStrokeWorkflow }) {
+  const guidance = {
+    'Pneumonia screening': {
+      title: 'Pneumonia precautionary guidance',
+      points: [
+        'Consult a qualified doctor for clinical assessment and confirmation.',
+        'Seek prompt medical attention for fever, persistent cough or breathing difficulty.',
+        'Seek emergency care for severe breathlessness, bluish lips or confusion.',
+        'Do not start antibiotics or other medication without medical advice.'
+      ]
+    },
+
+    'Tuberculosis screening': {
+      title: 'Tuberculosis precautionary guidance',
+      points: [
+        'Arrange a prompt evaluation with a qualified healthcare professional.',
+        'A doctor may recommend sputum testing, chest imaging or additional investigations.',
+        'Practise respiratory hygiene and wear a mask if experiencing a persistent cough.',
+        'Do not start or stop tuberculosis medication without medical supervision.'
+      ]
+    },
+
+    'Brain tumour screening': {
+      title: 'Brain tumour precautionary guidance',
+      points: [
+        'Consult a neurologist or neurosurgeon for further clinical evaluation.',
+        'A specialist may recommend additional MRI sequences or other investigations.',
+        'Seek emergency care for seizures, sudden weakness, confusion or a severe worsening headache.',
+        'A screening prediction does not confirm the presence of a brain tumour.'
+      ]
+    },
+
+    'Stroke screening': {
+      title: 'Stroke precautionary guidance',
+      points: [
+        'If stroke symptoms are present, seek emergency medical attention immediately, even if symptoms disappear.',
+        'In India, call 112 for emergency assistance.',
+        'Note the time when the person was last known to be well.',
+        'Do not give food, drinks or medication unless directed by medical professionals.'
+      ]
+    }
+  }
+
+  const selectedGuidance = guidance[task]
+
+  const hasClassifierPrediction =
+    !isStrokeWorkflow &&
+    result?.result?.status === 'PREDICTION_GENERATED'
+
+  const hasStrokeResponse =
+    isStrokeWorkflow &&
+    Boolean(result)
+
+  const hasAnalysisResponse =
+    hasClassifierPrediction || hasStrokeResponse ||
+    Boolean(result?.result?.status)
+
+  return (
+    <section className="content-card">
+      <div className="card-heading">
+        <div>
+          <span className="eyebrow">CLINICAL CONTEXT</span>
+          <h3>Precautionary guidance</h3>
+          <p>
+            General precautionary information for the selected screening workflow.
+          </p>
+        </div>
+        <Stethoscope size={20} className="muted-icon" />
+      </div>
+
+      {!hasAnalysisResponse ? (
+        <div className="guidance-box">
+          <ShieldCheck size={19} />
+          <div>
+            <b>Awaiting analysis</b>
+            <p>
+              Upload a medical image and run the selected analysis
+              to view its corresponding precautionary guidance.
+            </p>
+          </div>
+        </div>
+      ) : selectedGuidance ? (
+        <>
+          <div className="guidance-box">
+            <ShieldCheck size={19} />
+            <div>
+              <b>{selectedGuidance.title}</b>
+              <p>
+                {isStrokeWorkflow
+                  ? 'Stroke-related precautions. Segmentation output alone cannot establish a stroke diagnosis.'
+                  : hasClassifierPrediction
+                    ? `The model returned a screening prediction: ${result.result.prediction}. The following information is precautionary, not a treatment recommendation.`
+                    : 'The analysis response was received. No confirmed clinical diagnosis can be made from this prototype output.'
+                }
+              </p>
+            </div>
+          </div>
+
+          <div className="guidance-list">
+            {selectedGuidance.points.map((point, index) => (
+              <div className="guidance-item" key={index}>
+                <span className="guidance-number">{index + 1}</span>
+                <p>{point}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="guidance-box">
+          <Info size={19} />
+          <div>
+            <b>General precautionary guidance</b>
+            <p>
+              Consult a qualified healthcare professional for
+              interpretation of medical imaging results.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="guidance-disclaimer">
+        <ShieldCheck size={17} />
+        <div>
+          <b>Research output only</b>
+          <p>
+            MedVision AI is an academic prototype and is not validated
+            for clinical diagnosis. Its predictions and segmentation
+            outputs must not be used to make treatment decisions.
+            A qualified clinician must interpret medical images.
+          </p>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -1188,47 +1331,464 @@ function HistoryTable({ items, onReport }) {
   )
 }
 
+/* ANALYTICS PAGE WITH REAL CHARTS */
+
 function AnalyticsPage({ history }) {
+  const total = history.length
+
+  const completed = history.filter(item =>
+    item.status === 'ANALYSIS_COMPLETED' ||
+    item.result?.status === 'PREDICTION_GENERATED'
+  ).length
+
+  const otherSessions = total - completed
+
+  const chestXray = history.filter(
+    item => item.modality === 'Chest X-ray'
+  ).length
+
+  const brainMRI = history.filter(
+    item => item.modality === 'Brain MRI'
+  ).length
+
+  const taskCounts = {}
+  const predictionCounts = {}
+
+  history.forEach(item => {
+    const task = item.task || 'Other'
+    taskCounts[task] = (taskCounts[task] || 0) + 1
+
+    const prediction = item.result?.prediction
+
+    if (
+      prediction &&
+      item.result?.status === 'PREDICTION_GENERATED'
+    ) {
+      predictionCounts[prediction] =
+        (predictionCounts[prediction] || 0) + 1
+    }
+  })
+
+  const modalityData = [
+    { name: 'Chest X-ray', value: chestXray },
+    { name: 'Brain MRI', value: brainMRI }
+  ].filter(item => item.value > 0)
+
+  const outcomeData = [
+    { name: 'Completed outputs', value: completed },
+    { name: 'Other saved sessions', value: otherSessions }
+  ].filter(item => item.value > 0)
+
+  const taskData = Object.entries(taskCounts).map(([name, count]) => ({
+    name,
+    sessions: count
+  }))
+
+  const predictionData = Object.entries(predictionCounts).map(([name, count]) => ({
+    name,
+    predictions: count
+  }))
+
+  const successPercentage = total
+    ? Math.round((completed / total) * 100)
+    : 0
+
+  const hasHistory = total > 0
+  const hasPredictions = predictionData.length > 0
+
+  const panelStyle = {
+    background: '#ffffff',
+    border: '1px solid #e8edf4',
+    borderRadius: '14px',
+    padding: '22px',
+    minWidth: 0,
+    boxShadow: '0 2px 8px rgba(30,50,80,0.025)'
+  }
+
+  const headingStyle = {
+    color: '#17243b',
+    fontSize: '17px',
+    fontWeight: 750,
+    margin: '0 0 6px'
+  }
+
+  const descriptionStyle = {
+    color: '#8290a4',
+    fontSize: '12px',
+    lineHeight: 1.6,
+    margin: 0
+  }
+
+  const eyebrowStyle = {
+    color: '#71819a',
+    fontSize: '10px',
+    fontWeight: 800,
+    letterSpacing: '1.2px',
+    display: 'block',
+    marginBottom: '7px'
+  }
+
+  const chartHeight = {
+    width: '100%',
+    height: 270,
+    marginTop: 18
+  }
+
   return (
     <div className="page-content">
       <PageIntro
         eyebrow="WORKSPACE INSIGHTS"
         title="Analytics overview"
-        desc="A transparent summary of activity in this local demo workspace."
+        desc="Visual insights into imaging activity, analysis outcomes and prediction history."
       />
 
       <div className="stats-grid analytics-stats">
-        <Stat icon={Activity} label="Total sessions" value={history.length} note="Saved in this browser" />
-        <Stat icon={FileImage} label="Chest X-ray" value={history.filter(x => x.modality === 'Chest X-ray').length} note="Workflow selections" />
-        <Stat icon={Brain} label="Brain MRI" value={history.filter(x => x.modality === 'Brain MRI').length} note="Workflow selections" />
-        <Stat icon={FileText} label="Reports" value={history.length} note="Reports can be generated" />
+        <Stat
+          icon={Activity}
+          label="Total sessions"
+          value={total}
+          note="Recorded analyses"
+        />
+
+        <Stat
+          icon={CheckCircle2}
+          label="Completed outputs"
+          value={completed}
+          note="Recognized completed outputs"
+        />
+
+        <Stat
+          icon={FileImage}
+          label="Chest X-ray"
+          value={chestXray}
+          note="Imaging sessions"
+        />
+
+        <Stat
+          icon={Brain}
+          label="Brain MRI"
+          value={brainMRI}
+          note="Imaging sessions"
+        />
       </div>
+
+      {!hasHistory ? (
+        <section className="content-card">
+          <EmptyState
+            icon={ChartNoAxesCombined}
+            title="No analytics available yet"
+            text="Complete your first image analysis or stroke segmentation workflow. Your charts will automatically appear here."
+          />
+        </section>
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 390px), 1fr))',
+              gap: '20px',
+              marginBottom: '20px'
+            }}
+          >
+            <section style={panelStyle}>
+              <div>
+                <span style={eyebrowStyle}>IMAGING ACTIVITY</span>
+                <h3 style={headingStyle}>Modality distribution</h3>
+                <p style={descriptionStyle}>
+                  Distribution of recorded sessions across imaging modalities.
+                </p>
+              </div>
+
+              {modalityData.length ? (
+                <div style={chartHeight}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={modalityData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="45%"
+                        innerRadius={65}
+                        outerRadius={95}
+                        paddingAngle={4}
+                        labelLine={false}
+                        label={({ name, percent }) =>
+                          `${name}: ${(percent * 100).toFixed(0)}%`
+                        }
+                      >
+                        {modalityData.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                      <Legend verticalAlign="bottom" height={30} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <ChartEmpty text="No modality records available." />
+              )}
+            </section>
+
+            <section style={panelStyle}>
+              <div>
+                <span style={eyebrowStyle}>ANALYSIS STATUS</span>
+                <h3 style={headingStyle}>Session outcomes</h3>
+                <p style={descriptionStyle}>
+                  Completed outputs compared with other saved sessions.
+                </p>
+              </div>
+
+              {outcomeData.length ? (
+                <>
+                  <div style={chartHeight}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={outcomeData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="45%"
+                          innerRadius={65}
+                          outerRadius={95}
+                          paddingAngle={4}
+                          labelLine={false}
+                          label={({ percent }) =>
+                            `${(percent * 100).toFixed(0)}%`
+                          }
+                        >
+                          {outcomeData.map((entry, index) => (
+                            <Cell
+                              key={entry.name}
+                              fill={index === 0 ? '#20a779' : '#8b9bb1'}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={chartTooltipStyle} />
+                        <Legend verticalAlign="bottom" height={30} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <p style={{
+                    textAlign: 'center',
+                    color: '#71819a',
+                    fontSize: '12px',
+                    margin: '0'
+                  }}>
+                    {successPercentage}% of sessions have a recognized completed output.
+                  </p>
+                </>
+              ) : (
+                <ChartEmpty text="No outcome records available." />
+              )}
+            </section>
+
+            <section style={panelStyle}>
+              <div>
+                <span style={eyebrowStyle}>WORKFLOW INSIGHTS</span>
+                <h3 style={headingStyle}>Task distribution</h3>
+                <p style={descriptionStyle}>
+                  Number of sessions recorded for each analysis task.
+                </p>
+              </div>
+
+              {taskData.length ? (
+                <div style={chartHeight}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={taskData}
+                      margin={{ top: 15, right: 10, left: -15, bottom: 45 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#edf1f6"
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: '#71819a', fontSize: 10 }}
+                        angle={-15}
+                        textAnchor="end"
+                        interval={0}
+                        height={65}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fill: '#71819a', fontSize: 11 }}
+                      />
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                      <Bar
+                        dataKey="sessions"
+                        name="Sessions"
+                        fill="#3978d5"
+                        radius={[6, 6, 0, 0]}
+                        maxBarSize={55}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <ChartEmpty text="No task records available." />
+              )}
+            </section>
+
+            <section style={panelStyle}>
+              <div>
+                <span style={eyebrowStyle}>PREDICTION INSIGHTS</span>
+                <h3 style={headingStyle}>Prediction distribution</h3>
+                <p style={descriptionStyle}>
+                  Classification predictions actually returned by the backend.
+                </p>
+              </div>
+
+              {hasPredictions ? (
+                <div style={chartHeight}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={predictionData}
+                      margin={{ top: 15, right: 10, left: -15, bottom: 45 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#edf1f6"
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: '#71819a', fontSize: 10 }}
+                        angle={-15}
+                        textAnchor="end"
+                        interval={0}
+                        height={65}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fill: '#71819a', fontSize: 11 }}
+                      />
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                      <Bar
+                        dataKey="predictions"
+                        name="Predictions"
+                        fill="#20a779"
+                        radius={[6, 6, 0, 0]}
+                        maxBarSize={55}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <ChartEmpty text="No classification predictions recorded yet. Stroke segmentation outputs are not counted as classification predictions." />
+              )}
+            </section>
+          </div>
+
+          <section style={{ ...panelStyle, marginBottom: '22px' }}>
+            <div>
+              <span style={eyebrowStyle}>ACTIVITY SUMMARY</span>
+              <h3 style={headingStyle}>Workspace statistics</h3>
+              <p style={descriptionStyle}>
+                Summary calculated from the analysis history stored in this browser.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '15px',
+                marginTop: '22px'
+              }}
+            >
+              <SummaryNumber label="Total sessions" value={total} />
+              <SummaryNumber label="Completed outputs" value={completed} />
+              <SummaryNumber label="Other saved sessions" value={otherSessions} />
+              <SummaryNumber label="Classification predictions" value={predictionData.reduce((sum, item) => sum + item.predictions, 0)} />
+            </div>
+          </section>
+        </>
+      )}
 
       <section className="content-card">
         <div className="card-heading">
           <div>
             <span className="eyebrow">MODEL PERFORMANCE</span>
-            <h3>Evaluation metrics</h3>
+            <h3>Clinical evaluation metrics</h3>
             <p>
-              Clinical model metrics are not displayed until trained models
-              have been evaluated on a held-out test dataset.
+              Independent model evaluation results are separate from workspace activity statistics.
             </p>
           </div>
-          <span className="not-ready-tag">NO TEST METRICS</span>
+
+          <span className="not-ready-tag">AWAITING VALIDATION</span>
         </div>
 
         <div className="metric-empty">
           <ChartNoAxesCombined size={35} />
-          <b>Evaluation data not available</b>
+          <b>Clinical evaluation data not available</b>
           <p>
-            Accuracy, sensitivity, specificity, F1-score and AUROC must be
-            calculated from a held-out, patient-level test dataset.
-            No placeholder scores are used.
+            Accuracy, sensitivity, specificity, F1-score and AUROC
+            require evaluation on a held-out, patient-level test dataset.
+            Workspace activity is not a substitute for clinical model validation.
           </p>
         </div>
       </section>
 
       <SafetyStrip />
+    </div>
+  )
+}
+
+function ChartEmpty({ text }) {
+  return (
+    <div
+      style={{
+        height: 250,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        color: '#8290a4',
+        textAlign: 'center',
+        fontSize: 12,
+        padding: 20
+      }}
+    >
+      <ChartNoAxesCombined size={30} />
+      <span>{text}</span>
+    </div>
+  )
+}
+
+function SummaryNumber({ label, value }) {
+  return (
+    <div
+      style={{
+        background: '#f6f8fc',
+        border: '1px solid #edf0f5',
+        borderRadius: 10,
+        padding: '16px'
+      }}
+    >
+      <div style={{
+        color: '#71819a',
+        fontSize: 11,
+        marginBottom: 7
+      }}>
+        {label}
+      </div>
+      <b style={{
+        color: '#17243b',
+        fontSize: 23,
+        fontWeight: 750
+      }}>
+        {value}
+      </b>
     </div>
   )
 }
