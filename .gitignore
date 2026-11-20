@@ -1,0 +1,38 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+*.pt
+*.pth
+*.h5
+*.keras
+.DS_Store
+backend/uploads/*
+!backend/uploads/.gitkeep
+reports/generated/*
+!reports/generated/.gitkeep
+
+# Medical imaging datasets and large files
+dataSet/
+datasets/
+*.nii
+*.nii.gz
+*.dcm
+*.zip
+
+# Additional trained model formats
+*.pkl
+*.joblib
+*.onnx
+*.tflite
+*.pb
+
+# Python environments and cache
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+
+backend/.venv3/

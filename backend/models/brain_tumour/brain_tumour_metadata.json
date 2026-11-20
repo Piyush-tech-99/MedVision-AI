@@ -1,0 +1,96 @@
+{
+    "model_name": "MedVision AI Brain Tumour Classification",
+    "architecture": "EfficientNetB0",
+    "modality": "Brain MRI",
+    "task": "Brain tumour screening",
+    "model_type": "multiclass_classification",
+    "classes": {
+        "0": "glioma",
+        "1": "meningioma",
+        "2": "notumor",
+        "3": "pituitary"
+    },
+    "image_size": [
+        224,
+        224
+    ],
+    "input_channels": 3,
+    "input_range": [
+        0,
+        255
+    ],
+    "output_activation": "softmax",
+    "gradcam_layer": "top_conv",
+    "validation_accuracy": 0.8875,
+    "test_metrics": {
+        "accuracy": 0.8462,
+        "macro_precision": 0.8541,
+        "macro_recall": 0.8463,
+        "macro_f1_score": 0.841,
+        "macro_roc_auc": 0.9689
+    },
+    "per_class_metrics": {
+        "glioma": {
+            "precision": 0.9298,
+            "recall": 0.6625,
+            "f1_score": 0.7737,
+            "support": 400
+        },
+        "meningioma": {
+            "precision": 0.7878,
+            "recall": 0.7425,
+            "f1_score": 0.7645,
+            "support": 400
+        },
+        "notumor": {
+            "precision": 0.9144,
+            "recall": 0.9875,
+            "f1_score": 0.9495,
+            "support": 400
+        },
+        "pituitary": {
+            "precision": 0.7846,
+            "recall": 0.9925,
+            "f1_score": 0.8764,
+            "support": 400
+        }
+    },
+    "confusion_matrix": [
+        [
+            265,
+            75,
+            22,
+            38
+        ],
+        [
+            18,
+            297,
+            15,
+            70
+        ],
+        [
+            1,
+            3,
+            395,
+            1
+        ],
+        [
+            1,
+            2,
+            0,
+            397
+        ]
+    ],
+    "evaluation": {
+        "test_images": 1600,
+        "split_method": "Original Testing folder kept separate from Training folder",
+        "exact_duplicate_hashes_across_original_splits": 0,
+        "duplicate_check": "SHA-256 exact file comparison",
+        "patient_level_independence_verified": false
+    },
+    "dataset": "Brain Tumor MRI Dataset",
+    "dataset_source": "masoudnickparvar/brain-tumor-mri-dataset",
+    "dataset_license": "CC BY 4.0",
+    "disclaimer": "Academic research prototype only. Not intended for clinical diagnosis or treatment decisions. Performance on this dataset does not establish clinical validity.",
+    "evaluation_date": "2026-11-19"
+}

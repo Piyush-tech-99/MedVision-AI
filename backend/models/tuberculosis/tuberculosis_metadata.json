@@ -1,0 +1,48 @@
+{
+    "model_name": "MedVision AI Tuberculosis Screening",
+    "architecture": "EfficientNetB0",
+    "modality": "Chest X-ray",
+    "task": "Tuberculosis screening",
+    "classes": {
+        "0": "NORMAL",
+        "1": "TUBERCULOSIS"
+    },
+    "image_size": [
+        224,
+        224
+    ],
+    "input_channels": 3,
+    "input_range": [
+        0,
+        255
+    ],
+    "prediction_threshold": 0.5,
+    "gradcam_layer": "top_conv",
+    "test_metrics": {
+        "accuracy": 0.9905,
+        "precision": 0.9806,
+        "recall": 0.9619,
+        "specificity": 0.9962,
+        "f1_score": 0.9712,
+        "roc_auc": 0.9974
+    },
+    "confusion_matrix": [
+        [
+            523,
+            2
+        ],
+        [
+            4,
+            101
+        ]
+    ],
+    "dataset": {
+        "name": "TB Chest Radiography Database",
+        "normal_images": 3500,
+        "tuberculosis_images": 700,
+        "test_images": 630,
+        "split_method": "Stratified image-level split",
+        "random_state": 42
+    },
+    "disclaimer": "Academic research prototype. Not intended for clinical diagnosis or replacement of professional medical evaluation."
+}

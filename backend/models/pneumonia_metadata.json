@@ -1,0 +1,29 @@
+{
+    "model_name": "MedVision AI Pneumonia Detection",
+    "architecture": "EfficientNetB0",
+    "modality": "Chest X-ray",
+    "classes": {
+        "0": "NORMAL",
+        "1": "PNEUMONIA"
+    },
+    "image_size": [
+        224,
+        224
+    ],
+    "input_channels": 3,
+    "input_range": [
+        0,
+        255
+    ],
+    "prediction_threshold": 0.7,
+    "gradcam_layer": "top_conv",
+    "test_metrics": {
+        "accuracy": 0.8574,
+        "precision": 0.8265,
+        "recall": 0.9769,
+        "specificity": 0.6581,
+        "f1_score": 0.8954,
+        "roc_auc": 0.9659
+    },
+    "disclaimer": "Academic research prototype. Not intended for clinical diagnosis."
+}
