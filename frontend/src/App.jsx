@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, Brain, FileImage, FileText, HeartPulse, LayoutDashboard,
-  ShieldCheck, UploadCloud, X, LoaderCircle, AlertCircle, History,
+  ShieldCheck, UploadCloud, X, LoaderCircle, AlertCircle, History, LogOut,
   ChartNoAxesCombined, Settings, Info, ChevronRight, Download, ScanLine,
   Stethoscope, Clock3, Search, Menu, Image as ImageIcon, Sparkles,
   CheckCircle2, LockKeyhole
@@ -23,6 +23,12 @@ import {
 } from 'recharts'
 
 import {
+  loginUser,
+  registerUser,
+  getCurrentUser,
+  getAnalyses,
+  logoutUser,
+  isUserLoggedIn,
   analyzeImage,
   analyzeStroke,
   downloadReport,
@@ -59,7 +65,532 @@ const nav = [
   { id: 'settings', label: 'Settings', icon: Settings, group: 'SYSTEM' }
 ]
 
+
+function AuthScreen({
+  mode,
+  setMode,
+  onLogin,
+  onRegister,
+  loading,
+  error
+}) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const isRegister = mode === 'register'
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    setFormError('')
+
+    if (!email.trim() || !password) {
+      setFormError('Please enter your email and password.')
+      return
+    }
+
+    if (isRegister) {
+      if (!name.trim()) {
+        setFormError('Please enter your full name.')
+        return
+      }
+
+      if (password.length < 8) {
+        setFormError('Password must contain at least 8 characters.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setFormError('Passwords do not match.')
+        return
+      }
+
+      onRegister(name, email, password)
+    } else {
+      onLogin(email, password)
+    }
+  }
+
+  const styles = {
+    page: {
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '28px 18px',
+      background: `
+  radial-gradient(circle at 12% 20%, #d9eaff 0%, transparent 32%),
+  radial-gradient(circle at 90% 85%, #dcecff 0%, transparent 30%),
+  linear-gradient(135deg, #edf4ff, #f8faff 55%, #eaf2ff)
+`,
+      fontFamily: "'DM Sans', sans-serif"
+    },
+    card: {
+      width: '100%',
+      maxWidth: '1050px',
+      minHeight: '620px',
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      background: '#ffffff',
+      borderRadius: '22px',
+      overflow: 'hidden',
+      boxShadow: '0 24px 75px rgba(35, 67, 110, 0.13)'
+    },
+    left: {
+      padding: '45px 48px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
+    },
+    brand: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '42px'
+    },
+    logo: {
+      width: '44px',
+      height: '44px',
+      borderRadius: '13px',
+      background: '#eaf2ff',
+      color: '#3978d5',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    heading: {
+      fontSize: '29px',
+      fontWeight: 800,
+      color: '#23334d',
+      margin: '0 0 9px'
+    },
+    subtitle: {
+      color: '#8491a5',
+      fontSize: '13px',
+      lineHeight: 1.7,
+      marginBottom: '30px'
+    },
+    label: {
+      display: 'block',
+      fontSize: '12px',
+      fontWeight: 700,
+      color: '#44536a',
+      marginBottom: '8px'
+    },
+    input: {
+      width: '100%',
+      height: '47px',
+      border: '1px solid #e1e7f0',
+      borderRadius: '9px',
+      padding: '0 13px',
+      fontSize: '13px',
+      color: '#26364f',
+      outline: 'none',
+      boxSizing: 'border-box',
+      background: '#ffffff'
+    },
+    field: {
+      marginBottom: '19px'
+    },
+    button: {
+      width: '100%',
+      height: '49px',
+      border: 'none',
+      borderRadius: '9px',
+      background: '#3978d5',
+      color: '#ffffff',
+      fontSize: '14px',
+      fontWeight: 700,
+      cursor: 'pointer',
+      marginTop: '8px'
+    },
+    right: {
+      padding: '48px',
+      background: 'linear-gradient(145deg, #153b70, #2867ad 65%, #3983ce)',
+      color: '#ffffff',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden'
+    }
+  }
+
+  return (
+    <div style={styles.page}>
+      <style>{`
+        .auth-field:focus {
+          border-color: #3978d5 !important;
+          box-shadow: 0 0 0 3px rgba(57,120,213,.10);
+        }
+        .auth-submit:hover {
+          background: #2867bd !important;
+        }
+        .auth-switch:hover {
+          text-decoration: underline;
+        }
+        @media(max-width: 760px) {
+          .auth-card {
+            grid-template-columns: 1fr !important;
+          }
+          .auth-side {
+            display: none !important;
+          }
+          .auth-main {
+            padding: 35px 25px !important;
+          }
+        }
+      `}</style>
+
+      <div className="auth-card" style={styles.card}>
+        <div className="auth-main" style={styles.left}>
+          <div style={styles.brand}>
+            <div style={styles.logo}>
+              <HeartPulse size={25} />
+            </div>
+            <div>
+              <div style={{
+                fontSize: '20px',
+                fontWeight: 800,
+                color: '#243750'
+              }}>
+                MedVision <span style={{ color: '#3978d5' }}>AI</span>
+              </div>
+              <div style={{
+                fontSize: '9px',
+                letterSpacing: '2px',
+                color: '#8996a8',
+                fontWeight: 700
+              }}>
+                IMAGING INTELLIGENCE
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            color: '#3978d5',
+            fontSize: '10px',
+            fontWeight: 800,
+            letterSpacing: '1.8px',
+            marginBottom: '12px'
+          }}>
+            SECURE MEDICAL WORKSPACE
+          </div>
+
+          <h1 style={styles.heading}>
+            {isRegister ? 'Create your account' : 'Welcome back'}
+          </h1>
+
+          <p style={styles.subtitle}>
+            {isRegister
+              ? 'Create your patient account to access medical imaging analysis and your personal analysis history.'
+              : 'Sign in to access your medical imaging analysis workspace.'}
+          </p>
+
+          <form onSubmit={handleSubmit}>
+            {isRegister && (
+              <div style={styles.field}>
+                <label style={styles.label}>Full name</label>
+                <input
+                  className="auth-field"
+                  style={styles.input}
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoComplete="name"
+                  required
+                />
+              </div>
+            )}
+
+            <div style={styles.field}>
+              <label style={styles.label}>Email address</label>
+              <input
+                className="auth-field"
+                style={styles.input}
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="auth-field"
+                  style={{ ...styles.input, paddingRight: '65px' }}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#3978d5',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            {isRegister && (
+              <div style={styles.field}>
+                <label style={styles.label}>Confirm password</label>
+                <input
+                  className="auth-field"
+                  style={styles.input}
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+            )}
+
+            {(formError || error) && (
+              <div style={{
+                background: '#fff0f0',
+                color: '#c33c43',
+                padding: '11px 13px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                marginBottom: '15px',
+                lineHeight: 1.5
+              }}>
+                <AlertCircle
+                  size={14}
+                  style={{ verticalAlign: 'middle', marginRight: '6px' }}
+                />
+                {formError || error}
+              </div>
+            )}
+
+            <button
+              className="auth-submit"
+              type="submit"
+              disabled={loading}
+              style={{
+                ...styles.button,
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {loading
+                ? 'Please wait...'
+                : isRegister
+                  ? 'Create patient account'
+                  : 'Sign in to MedVision AI'}
+            </button>
+          </form>
+
+          <div style={{
+            textAlign: 'center',
+            marginTop: '25px',
+            color: '#8491a5',
+            fontSize: '12px'
+          }}>
+            {isRegister
+              ? 'Already have an account? '
+              : "Don't have an account? "}
+
+            <button
+              className="auth-switch"
+              type="button"
+              onClick={() => {
+                setFormError('')
+                setMode(isRegister ? 'login' : 'register')
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#3978d5',
+                fontWeight: 800,
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              {isRegister ? 'Sign in' : 'Create account'}
+            </button>
+          </div>
+
+          <div style={{
+            marginTop: '30px',
+            textAlign: 'center',
+            color: '#a1acbb',
+            fontSize: '10px'
+          }}>
+            <ShieldCheck
+              size={13}
+              style={{ verticalAlign: 'middle', marginRight: '5px' }}
+            />
+            Secure access · Role-based workspace
+          </div>
+        </div>
+
+        
+<div className="auth-side" style={{
+  ...styles.right,
+  background: 'radial-gradient(circle at 80% 15%, #397fc4 0%, transparent 35%), linear-gradient(145deg, #0b2040 0%, #153f72 52%, #286bb0 100%)',
+  padding: '42px 45px'
+}}>
+  <div className="auth-orb" style={{
+    width: 280,
+    height: 280,
+    top: -100,
+    right: -100,
+    background: 'rgba(98,175,255,.13)'
+  }} />
+
+  <div className="auth-orb" style={{
+    width: 230,
+    height: 230,
+    bottom: -90,
+    left: -90,
+    background: 'rgba(95,160,255,.12)',
+    animationDelay: '-3s'
+  }} />
+
+  <div style={{
+    position: 'relative',
+    zIndex: 2,
+    fontSize: '10px',
+    fontWeight: 800,
+    letterSpacing: '2px',
+    color: '#b9ddff'
+  }}>
+    INTELLIGENT MEDICAL IMAGING
+  </div>
+
+  <div className="auth-scan-visual">
+    <div className="auth-scan-icon">
+      <HeartPulse size={43} />
+    </div>
+  </div>
+
+  <div className="auth-float-card" style={{
+    top: '185px',
+    left: '5px'
+  }}>
+    <ShieldCheck size={23} color="#9ee8d1" />
+    <div>
+      <b style={{fontSize: '12px'}}>Secure Workspace</b>
+      <small>Protected access</small>
+    </div>
+  </div>
+
+  <div className="auth-float-card" style={{
+    bottom: '205px',
+    right: '0px',
+    animationDelay: '-2s'
+  }}>
+    <Activity size={23} color="#9bd4ff" />
+    <div>
+      <b style={{fontSize: '12px'}}>AI Analysis</b>
+      <small>Imaging intelligence</small>
+    </div>
+  </div>
+
+  <div style={{
+    position: 'relative',
+    zIndex: 2,
+    textAlign: 'center'
+  }}>
+    <h2 style={{
+      fontSize: '29px',
+      lineHeight: 1.3,
+      fontWeight: 800,
+      margin: '0 0 13px',
+      color: '#ffffff'
+    }}>
+      See beyond the image.
+      <br />
+      Discover deeper insights.
+    </h2>
+
+    <p style={{
+      fontSize: '12px',
+      lineHeight: 1.8,
+      color: '#d1e4fa',
+      maxWidth: '340px',
+      margin: '0 auto 25px'
+    }}>
+      Explore AI-assisted analysis workflows for chest X-rays
+      and brain MRI scans in a secure research environment.
+    </p>
+
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: '9px'
+    }}>
+      {['X-Ray Analysis', 'Brain MRI', 'Explainable AI'].map(item => (
+        <span key={item} style={{
+          padding: '8px 12px',
+          border: '1px solid rgba(255,255,255,.2)',
+          borderRadius: '20px',
+          background: 'rgba(255,255,255,.09)',
+          color: '#e3f1ff',
+          fontSize: '10px',
+          fontWeight: 600
+        }}>
+          {item}
+        </span>
+      ))}
+    </div>
+  </div>
+
+  <div style={{
+    position: 'relative',
+    zIndex: 2,
+    borderTop: '1px solid rgba(255,255,255,.17)',
+    marginTop: '30px',
+    paddingTop: '17px',
+    color: '#c6def7',
+    fontSize: '10px',
+    textAlign: 'center'
+  }}>
+    Academic research prototype · Not intended for clinical diagnosis
+  </div>
+</div>
+
+      </div>
+    </div>
+  )
+}
+
+
 export default function App() {
+  const [user, setUser] = useState(null)
+const [authLoading, setAuthLoading] = useState(true)
+const [authBusy, setAuthBusy] = useState(false)
+const [authMode, setAuthMode] = useState('login')
+const [authError, setAuthError] = useState('')
+
   const [page, setPage] = useState('dashboard')
   const [modality, setModality] = useState('Chest X-ray')
   const [task, setTask] = useState(tasks['Chest X-ray'][0])
@@ -105,14 +636,127 @@ export default function App() {
     modality === 'Brain MRI' && task === 'Stroke screening'
 
   useEffect(() => {
-    localStorage.setItem('medvision-history', JSON.stringify(history))
-  }, [history])
+  if (!user) return
+  localStorage.setItem('medvision-history', JSON.stringify(history))
+}, [history, user])
 
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview)
     }
   }, [preview])
+
+  useEffect(() => {
+  let active = true
+
+  async function restoreSession() {
+    try {
+      if (!isUserLoggedIn()) return
+
+      const profile = await getCurrentUser()
+
+      if (!active) return
+
+      setUser(profile)
+
+      const data = await getAnalyses()
+
+      if (active) {
+        const rows = Array.isArray(data)
+          ? data
+          : data?.analyses || data?.items || []
+
+        setHistory(rows)
+      }
+    } catch (error) {
+      logoutUser()
+       if (active) {
+      setUser(null)
+      setHistory([])
+      setAuthError('Your session has expired. Please sign in again.')
+      }
+    } finally {
+      if (active) setAuthLoading(false)
+    }
+  }
+
+  restoreSession()
+
+  return () => {
+    active = false
+  }
+}, [])
+
+async function handleStrokeDownload(url) {
+  try {
+    setError('')
+    await downloadStrokeSegmentation(url)
+  } catch (err) {
+    setError(err.message || 'Could not download the segmentation file.')
+  }
+}
+
+async function handleLogin(email, password) {
+  setAuthBusy(true)
+  setAuthError('')
+
+  try {
+    await loginUser(email.trim().toLowerCase(), password)
+
+    const profile = await getCurrentUser()
+    setUser(profile)
+
+    const data = await getAnalyses()
+    const rows = Array.isArray(data)
+      ? data
+      : data?.analyses || data?.items || []
+
+    setHistory(rows)
+    setPage('dashboard')
+   } catch (error) {
+    logoutUser()
+    setUser(null)
+    setHistory([])
+    setAuthError(error.message || 'Login failed.')
+  } finally {
+    setAuthBusy(false)
+  }
+}
+
+async function handleRegister(name, email, password) {
+  setAuthBusy(true)
+  setAuthError('')
+
+  try {
+    await registerUser(name.trim(), email.trim().toLowerCase(), password)
+
+    const profile = await getCurrentUser()
+    setUser(profile)
+
+    const data = await getAnalyses()
+    const rows = Array.isArray(data)
+      ? data
+      : data?.analyses || data?.items || []
+
+    setHistory(rows)
+    setPage('dashboard')
+  } catch (error) {
+    logoutUser()
+    setAuthError(error.message || 'Registration failed.')
+  } finally {
+    setAuthBusy(false)
+  }
+}
+
+function handleLogout() {
+  logoutUser()
+  setUser(null)
+  setHistory([])
+  setResult(null)
+  setPage('dashboard')
+  setAuthMode('login')
+  setAuthError('')
+}
 
   function clearImageSelection() {
     setFile(null)
@@ -258,44 +902,32 @@ export default function App() {
     }
   }
 
-  async function handleStrokeDownload(url) {
-    try {
-      setError('')
-      await downloadStrokeSegmentation(url)
-    } catch (err) {
-      setError(err.message || 'Could not download the segmentation file.')
-    }
-  }
+  
+async function makeReport(record = null) {
+  try {
+    setError('')
 
-  async function makeReport(record = null) {
-    const source = record || {
-      modality,
-      task,
-      filename: isStrokeWorkflow
-        ? `${dwiFile?.name || 'DWI'} + ${adcFile?.name || 'ADC'}`
-        : file?.name,
-      analysis_code: result?.analysis_code || null,
-      result: result?.result || {
-        status: 'DEMO_ONLY',
-        message: 'No prediction result available.'
-      }
+    const source = record || history.find(
+      item => item.analysis_code === result?.analysis_code
+    )
+
+    const analysisId = Number(
+      source?.id ?? source?.analysis_id
+    )
+
+    if (!Number.isInteger(analysisId) || analysisId <= 0) {
+      throw new Error(
+        'A valid saved analysis ID is required to generate the report.'
+      )
     }
 
-    try {
-      await downloadReport({
-        modality: source.modality,
-        task: source.task,
-        filename: source.filename,
-        analysis_code: source.analysis_code || null,
-        result: source.result || {
-          status: source.status,
-          message: source.message
-        }
-      })
-    } catch (err) {
-      setError(err.message || 'Report could not be generated.')
-    }
+    await downloadReport(analysisId)
+
+  } catch (err) {
+    setError(err.message || 'Report could not be generated.')
   }
+}
+
 
   function openPage(id) {
     setPage(id)
@@ -313,6 +945,22 @@ export default function App() {
   )
 
   const currentTitle = nav.find(n => n.id === page)?.label || 'Home'
+  if (authLoading) {
+  return <div>Checking secure session...</div>
+}
+
+if (!user) {
+  return (
+    <AuthScreen
+      mode={authMode}
+      setMode={setAuthMode}
+      onLogin={handleLogin}
+      onRegister={handleRegister}
+      loading={authBusy}
+      error={authError}
+    />
+  )
+}
 
   return (
     <div className="app-shell">
@@ -389,11 +1037,46 @@ export default function App() {
           </div>
 
           <div className="top-actions">
-            <span className="demo-pill">
-              <ShieldCheck size={14} /> Academic demo
-            </span>
-            <div className="avatar">MV</div>
-          </div>
+  <span className="demo-pill">
+    <ShieldCheck size={14} /> Academic demo
+  </span>
+
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    marginRight: '5px'
+  }}>
+    <b style={{ fontSize: '12px', color: '#26364f' }}>
+      {user?.name || 'User'}
+    </b>
+    <small style={{ fontSize: '10px', color: '#8290a4' }}>
+      {user?.role || 'Patient'}
+    </small>
+  </div>
+
+  <button
+    type="button"
+    onClick={handleLogout}
+    title="Logout"
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '7px',
+      padding: '9px 13px',
+      border: '1px solid #e3e9f1',
+      borderRadius: '9px',
+      background: '#ffffff',
+      color: '#d34c55',
+      fontSize: '12px',
+      fontWeight: 700,
+      cursor: 'pointer'
+    }}
+  >
+    <LogOut size={16} />
+    Logout
+  </button>
+</div>
         </header>
 
         {error && (
