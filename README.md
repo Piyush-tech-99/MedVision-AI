@@ -75,3 +75,10 @@ Open the Vite URL shown in the terminal, normally http://localhost:5173/.
 7. Only then enable model-backed predictions and include model version, limitations and measured metrics in reports.
 
 For the brain-stroke research task, use appropriate MRI sequences and a dataset designed for that task; a generic brain MRI classifier must not be presented as a stroke diagnostic system.
+
+## ScreenShots
+<img width="1906" height="847" alt="Screenshot 2026-11-21 230914" src="https://github.com/user-attachments/assets/72aa1dcb-8e74-4e37-b828-57e3622299f8" />
+<img width="1535" height="843" alt="Screenshot 2026-11-21 230944" src="https://github.com/user-attachments/assets/88987cfa-08ed-41f4-ac1e-c4f9779c5489" />
+<img width="1886" height="857" alt="Screenshot 2026-11-21 231022" src="https://github.com/user-attachments/assets/a7c6f758-3c5e-47d6-9f9d-2758addd43ce" />
+
+
