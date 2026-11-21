@@ -1,16 +1,18 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+
+const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001'
 
 // =========================================================
 // IMAGE ANALYSIS
 // Pneumonia, Tuberculosis, Brain Tumour
 // =========================================================
 
-export async function analyzeImage(file, modality, task) {
+export async function analyzeImage(file, modality, task, guestToken) {
   const body = new FormData()
 
   body.append('file', file)
   body.append('modality', modality)
   body.append('task', task)
+  body.append('guest_token', guestToken)
 
   const response = await fetch(`${BASE}/api/analyze`, {
     method: 'POST',
@@ -31,11 +33,12 @@ export async function analyzeImage(file, modality, task) {
 // Requires DWI + ADC NIfTI files
 // =========================================================
 
-export async function analyzeStroke(dwiFile, adcFile) {
+export async function analyzeStroke(dwiFile, adcFile, guestToken) {
   const body = new FormData()
 
   body.append('dwi_file', dwiFile)
   body.append('adc_file', adcFile)
+  body.append('guest_token', guestToken)
 
   const response = await fetch(`${BASE}/api/analyze-stroke`, {
     method: 'POST',

@@ -85,6 +85,22 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [mobileNav, setMobileNav] = useState(false)
 
+  // Persistent guest token for this browser workspace.
+  const [guestToken] = useState(() => {
+    const storageKey = 'medvision-guest-token'
+    let token = localStorage.getItem(storageKey)
+
+    if (!token) {
+      token = globalThis.crypto?.randomUUID
+        ? globalThis.crypto.randomUUID()
+        : `mv-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+      localStorage.setItem(storageKey, token)
+    }
+
+    return token
+  })
+
   const isStrokeWorkflow =
     modality === 'Brain MRI' && task === 'Stroke screening'
 
@@ -192,12 +208,13 @@ export default function App() {
           return
         }
 
-        data = await analyzeStroke(dwiFile, adcFile)
+        data = await analyzeStroke(dwiFile, adcFile, guestToken)
 
         setResult(data)
 
         record = {
           id: Date.now(),
+          analysis_code: data.analysis_code || null,
           date: new Date().toISOString(),
           modality: 'Brain MRI',
           task: 'Stroke screening',
@@ -213,12 +230,13 @@ export default function App() {
           return
         }
 
-        data = await analyzeImage(file, modality, task)
+        data = await analyzeImage(file, modality, task, guestToken)
 
         setResult(data)
 
         record = {
           id: Date.now(),
+          analysis_code: data.analysis_code || null,
           date: new Date().toISOString(),
           modality,
           task,
@@ -256,7 +274,8 @@ export default function App() {
       filename: isStrokeWorkflow
         ? `${dwiFile?.name || 'DWI'} + ${adcFile?.name || 'ADC'}`
         : file?.name,
-      result: result || {
+      analysis_code: result?.analysis_code || null,
+      result: result?.result || {
         status: 'DEMO_ONLY',
         message: 'No prediction result available.'
       }
@@ -267,6 +286,7 @@ export default function App() {
         modality: source.modality,
         task: source.task,
         filename: source.filename,
+        analysis_code: source.analysis_code || null,
         result: source.result || {
           status: source.status,
           message: source.message
@@ -285,7 +305,7 @@ export default function App() {
 
   const filteredHistory = useMemo(
     () => history.filter(x =>
-      `${x.filename} ${x.modality} ${x.task}`
+      `${x.analysis_code || ''} ${x.filename} ${x.modality} ${x.task}`
         .toLowerCase()
         .includes(search.toLowerCase())
     ),
@@ -899,6 +919,11 @@ function AnalysisPage(p) {
                         </div>
                       </div>
 
+                      <div className="result-detail">
+                        <small>ANALYSIS ID</small>
+                        <b>{p.result.analysis_code || 'Not available'}</b>
+                      </div>
+
                       <div className="stroke-metrics-grid">
                         <div className="stroke-metric">
                           <small>PROCESSED SLICES</small>
@@ -994,6 +1019,11 @@ function AnalysisPage(p) {
                       </div>
                     </div>
                   )}
+
+                  <div className="result-detail">
+                    <small>ANALYSIS ID</small>
+                    <b>{p.result.analysis_code || 'Not available'}</b>
+                  </div>
 
                   <div className="result-detail">
                     <small>SELECTED WORKFLOW</small>
@@ -1265,7 +1295,7 @@ function HistoryPage({ history, search, setSearch, onReport }) {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search filename or modality"
+              placeholder="Search Analysis ID, filename or modality"
             />
           </div>
         </div>
@@ -1291,6 +1321,7 @@ function HistoryTable({ items, onReport }) {
         <thead>
           <tr>
             <th>SCAN / FILE</th>
+            <th>ANALYSIS ID</th>
             <th>MODALITY</th>
             <th>ANALYSIS TASK</th>
             <th>DATE</th>
@@ -1307,6 +1338,11 @@ function HistoryTable({ items, onReport }) {
                   <span><FileImage size={16} /></span>
                   <b>{item.filename}</b>
                 </div>
+              </td>
+              <td>
+                <span className="analysis-id">
+                  {item.analysis_code || '—'}
+                </span>
               </td>
               <td>{item.modality}</td>
               <td>{item.task}</td>
@@ -1821,6 +1857,7 @@ function ReportsPage({ history, onReport }) {
                   <span>
                     {item.modality} · {item.task} · {new Date(item.date).toLocaleDateString()}
                   </span>
+                  <small>Analysis ID: {item.analysis_code || 'Not available'}</small>
                   <small>Demo report · Research output only</small>
                 </div>
                 <button className="outline-button" onClick={() => onReport(item)}>
@@ -1929,7 +1966,7 @@ function SettingsPage() {
         <div className="setting-row">
           <div>
             <b>Backend API</b>
-            <span>FastAPI service at http://127.0.0.1:8000</span>
+            <span>FastAPI service at http://127.0.0.1:8001</span>
           </div>
           <span className="setting-value">Local development</span>
         </div>

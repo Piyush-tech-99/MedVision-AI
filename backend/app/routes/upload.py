@@ -1,7 +1,10 @@
+
 import logging
 import os
+import json
 import tempfile
 from pathlib import Path
+from datetime import datetime, timezone
 
 from fastapi import (
     APIRouter,
@@ -11,6 +14,9 @@ from fastapi import (
     HTTPException
 )
 from fastapi.responses import FileResponse
+
+from app.database import SessionLocal
+from app.models import Analysis, AnalysisResult, User
 
 from app.services.image import inspect_image
 from app.services.prediction import predict_image, model_status, _load_model
@@ -30,6 +36,126 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 STROKE_RESULTS_DIR = (
     BACKEND_ROOT / "generated" / "stroke_results"
 )
+
+
+# =========================================================
+# DATABASE PERSISTENCE
+# =========================================================
+
+def save_analysis_to_database(
+    modality,
+    task,
+    filename,
+    status,
+    result,
+    guest_token
+):
+    """
+    Identify or create a guest user and associate
+    every analysis with that user in PostgreSQL.
+
+    Generate a unique public Analysis Code using
+    the database analysis ID.
+    """
+
+    db = SessionLocal()
+
+    try:
+        user = db.query(User).filter(
+            User.guest_token == guest_token
+        ).first()
+
+        if not user:
+            user = User(
+                guest_token=guest_token,
+                name="Guest User",
+                email=f"{guest_token}@guest.medvision.local",
+                hashed_password="guest-account-no-login",
+                role="guest"
+            )
+
+            db.add(user)
+            db.flush()
+
+        analysis = Analysis(
+            user_id=user.id,
+            modality=modality,
+            task=task,
+            filename=(filename or "Unknown")[:255],
+            status=status
+        )
+
+        db.add(analysis)
+        db.flush()
+
+        # Generate a readable and unique Analysis Code.
+        current_year = datetime.now(timezone.utc).year
+
+        analysis.analysis_code = (
+            f"MVA-{current_year}-{analysis.id:06d}"
+        )
+
+        prediction = None
+        confidence = None
+
+        if isinstance(result, dict):
+            prediction = (
+                result.get("prediction")
+                or result.get("predicted_class")
+                or result.get("class_name")
+            )
+
+            confidence_value = (
+                result.get("confidence")
+                or result.get("confidence_score")
+            )
+
+            if confidence_value is not None:
+                try:
+                    confidence = float(
+                        str(confidence_value).replace("%", "")
+                    )
+                except (ValueError, TypeError):
+                    confidence = None
+
+        stored_result = AnalysisResult(
+            analysis_id=analysis.id,
+            prediction=(
+                str(prediction)[:150]
+                if prediction is not None
+                else None
+            ),
+            confidence=confidence,
+            result_json=json.dumps(result, default=str)
+        )
+
+        db.add(stored_result)
+        db.commit()
+
+        saved_ids = {
+            "user_id": user.id,
+            "analysis_id": analysis.id,
+            "analysis_code": analysis.analysis_code
+        }
+
+        logger.info(
+            "Analysis %s (%s) saved for user %s",
+            analysis.id,
+            analysis.analysis_code,
+            user.id
+        )
+
+        return saved_ids
+
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Could not save analysis to PostgreSQL"
+        )
+        return None
+
+    finally:
+        db.close()
 
 
 # =========================================================
@@ -62,8 +188,15 @@ def get_model_status(
 async def analyze(
     file: UploadFile = File(...),
     modality: str = Form(...),
-    task: str = Form(...)
+    task: str = Form(...),
+    guest_token: str = Form(...)
 ):
+
+    if not guest_token.strip() or len(guest_token) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid guest identifier."
+        )
 
     if file.content_type not in ALLOWED:
         raise HTTPException(
@@ -106,23 +239,37 @@ async def analyze(
         try:
             model = _load_model(result["model_path"])
             gradcam_overlay = generate_gradcam(model, content)
+
         except Exception as exc:
             logger.exception("Grad-CAM generation failed")
-            result["gradcam_note"] = f"Prediction generated, but Grad-CAM failed: {exc}"
+            result["gradcam_note"] = (
+                f"Prediction generated, but Grad-CAM failed: {exc}"
+            )
 
     connected = (
         result.get("status") == "PREDICTION_GENERATED"
     )
 
+    response_status = (
+        "ANALYSIS_COMPLETED"
+        if connected
+        else result.get(
+            "status",
+            "MODEL_NOT_CONNECTED"
+        )
+    )
+
+    saved_ids = save_analysis_to_database(
+        modality=modality,
+        task=task,
+        filename=file.filename,
+        status=response_status,
+        result=result,
+        guest_token=guest_token.strip()
+    )
+
     return {
-        "status": (
-            "ANALYSIS_COMPLETED"
-            if connected
-            else result.get(
-                "status",
-                "MODEL_NOT_CONNECTED"
-            )
-        ),
+        "status": response_status,
         "mode": (
             "model"
             if connected
@@ -130,13 +277,16 @@ async def analyze(
         ),
         "message": result.get(
             "note",
-            "No trained model was called."
+            "No trained medical imaging model was called."
         ),
         "task": task,
         "modality": modality,
         "image": image_info,
         "result": result,
-        "gradcam_overlay": gradcam_overlay
+        "gradcam_overlay": gradcam_overlay,
+        "user_id": saved_ids["user_id"] if saved_ids else None,
+        "analysis_id": saved_ids["analysis_id"] if saved_ids else None,
+        "analysis_code": saved_ids["analysis_code"] if saved_ids else None
     }
 
 
@@ -207,8 +357,15 @@ async def save_mri_upload(upload: UploadFile, destination: str):
 @router.post("/analyze-stroke")
 async def analyze_stroke(
     dwi_file: UploadFile = File(...),
-    adc_file: UploadFile = File(...)
+    adc_file: UploadFile = File(...),
+    guest_token: str = Form(...)
 ):
+
+    if not guest_token.strip() or len(guest_token) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid guest identifier."
+        )
 
     if not validate_nifti_filename(dwi_file.filename):
         raise HTTPException(
@@ -277,8 +434,21 @@ async def analyze_stroke(
                 f"/api/stroke-result/{segmentation_filename}"
             )
 
+        response_status = "ANALYSIS_COMPLETED"
+
+        saved_ids = save_analysis_to_database(
+            modality="Brain MRI",
+            task="Stroke screening",
+            filename=(
+                f"{dwi_file.filename} + {adc_file.filename}"
+            ),
+            status=response_status,
+            result=result,
+            guest_token=guest_token.strip()
+        )
+
         return {
-            "status": "ANALYSIS_COMPLETED",
+            "status": response_status,
             "mode": "model",
             "modality": "Brain MRI",
             "task": "Stroke screening",
@@ -293,7 +463,10 @@ async def analyze_stroke(
                 "Stroke segmentation completed. "
                 "This output is for research purposes "
                 "and is not a clinical diagnosis."
-            )
+            ),
+            "user_id": saved_ids["user_id"] if saved_ids else None,
+            "analysis_id": saved_ids["analysis_id"] if saved_ids else None,
+            "analysis_code": saved_ids["analysis_code"] if saved_ids else None
         }
 
     except HTTPException:
