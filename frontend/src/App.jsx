@@ -857,7 +857,7 @@ function handleLogout() {
         setResult(data)
 
         record = {
-          id: Date.now(),
+          id: Number(data.analysis_id),
           analysis_code: data.analysis_code || null,
           date: new Date().toISOString(),
           modality: 'Brain MRI',
@@ -879,7 +879,7 @@ function handleLogout() {
         setResult(data)
 
         record = {
-          id: Date.now(),
+          id: Number(data.analysis_id),
           analysis_code: data.analysis_code || null,
           date: new Date().toISOString(),
           modality,

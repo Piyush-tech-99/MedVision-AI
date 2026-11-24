@@ -3,174 +3,519 @@ from io import BytesIO
 from datetime import datetime, timezone
 
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    KeepTogether
+)
 
 
-NAVY = colors.HexColor('#102B49')
-TEAL = colors.HexColor('#197D99')
-MUTED = colors.HexColor('#66788D')
-PALE = colors.HexColor('#EFF6F8')
+NAVY = colors.HexColor("#102B49")
+TEAL = colors.HexColor("#197D99")
+MUTED = colors.HexColor("#66788D")
+PALE = colors.HexColor("#EFF6F8")
+BORDER = colors.HexColor("#DCE6ED")
 
 
-def _draw_wrapped(pdf, text, x, y, max_width, font='Helvetica', size=9, leading=14):
-    words = str(text).split()
-    line = ''
+def _safe_text(value, fallback="Not available"):
+    if value is None or value == "":
+        return fallback
 
-    pdf.setFont(font, size)
+    return str(value)
 
-    for word in words:
-        candidate = f'{line} {word}'.strip()
 
-        if stringWidth(candidate, font, size) <= max_width:
-            line = candidate
-        else:
-            pdf.drawString(x, y, line)
-            y -= leading
-            line = word
+def _percentage(value):
+    if value is None:
+        return "Not available"
 
-    if line:
-        pdf.drawString(x, y, line)
-        y -= leading
+    try:
+        number = float(value)
 
-    return y
+        if 0 <= number <= 1:
+            number *= 100
+
+        return f"{number:.2f}%"
+
+    except (ValueError, TypeError):
+        return _safe_text(value)
+
+
+def _make_styles():
+    styles = getSampleStyleSheet()
+
+    styles.add(ParagraphStyle(
+        name="ReportTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=21,
+        leading=25,
+        textColor=colors.white,
+        alignment=TA_LEFT,
+        spaceAfter=5
+    ))
+
+    styles.add(ParagraphStyle(
+        name="ReportSubtitle",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#D7EAF0")
+    ))
+
+    styles.add(ParagraphStyle(
+        name="SectionHeading",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=16,
+        textColor=NAVY,
+        spaceBefore=12,
+        spaceAfter=8
+    ))
+
+    styles.add(ParagraphStyle(
+        name="BodyTextCustom",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=8.5,
+        leading=13,
+        textColor=NAVY,
+        spaceAfter=5
+    ))
+
+    styles.add(ParagraphStyle(
+        name="SmallMuted",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=11,
+        textColor=MUTED
+    ))
+
+    styles.add(ParagraphStyle(
+        name="TableLabel",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=11,
+        textColor=MUTED
+    ))
+
+    styles.add(ParagraphStyle(
+        name="TableValue",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=11,
+        textColor=NAVY,
+        wordWrap="CJK"
+    ))
+
+    styles.add(ParagraphStyle(
+        name="PredictionValue",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=16,
+        textColor=TEAL
+    ))
+
+    return styles
+
+
+def _paragraph(value, style):
+    escaped = (
+        _safe_text(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+    return Paragraph(escaped, style)
+
+
+def _make_table(rows, styles, widths=None):
+    formatted_rows = []
+
+    for label, value in rows:
+        formatted_rows.append([
+            _paragraph(label, styles["TableLabel"]),
+            _paragraph(value, styles["TableValue"])
+        ])
+
+    table = Table(
+        formatted_rows,
+        colWidths=widths,
+        repeatRows=0,
+        hAlign="LEFT"
+    )
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("BACKGROUND", (0, 0), (0, -1), PALE)
+    ]))
+
+    return table
+
+
+def _header_footer(canvas, doc):
+    canvas.saveState()
+
+    width, height = A4
+
+    canvas.setFillColor(NAVY)
+    canvas.roundRect(
+        35,
+        height - 135,
+        width - 70,
+        102,
+        10,
+        fill=1,
+        stroke=0
+    )
+
+    canvas.setFillColor(colors.white)
+    canvas.setFont("Helvetica-Bold", 21)
+    canvas.drawString(52, height - 75, "MedVision AI")
+
+    canvas.setFillColor(colors.HexColor("#D7EAF0"))
+    canvas.setFont("Helvetica", 9)
+    canvas.drawString(
+        52,
+        height - 96,
+        "Medical Imaging Analysis - Analysis Report"
+    )
+
+    canvas.setFillColor(colors.HexColor("#B8DDE5"))
+    canvas.setFont("Helvetica", 7.5)
+    canvas.drawString(
+        52,
+        height - 117,
+        "ACADEMIC PROTOTYPE  |  NOT FOR CLINICAL USE"
+    )
+
+    canvas.setStrokeColor(BORDER)
+    canvas.line(52, 43, width - 52, 43)
+
+    canvas.setFillColor(MUTED)
+    canvas.setFont("Helvetica", 7)
+    canvas.drawString(
+        52,
+        30,
+        "MedVision AI - Academic prototype - Not for clinical use"
+    )
+
+    canvas.drawRightString(
+        width - 52,
+        30,
+        f"Page {doc.page}"
+    )
+
+    canvas.restoreState()
 
 
 def create_demo_pdf(payload: dict) -> bytes:
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
 
-    width, height = A4
-    left, right = 52, width - 52
-    y = height - 58
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=52,
+        leftMargin=52,
+        topMargin=155,
+        bottomMargin=58,
+        title="MedVision AI - Analysis Report",
+        author="MedVision AI"
+    )
 
-    pdf.setTitle('MedVision AI - Academic Demonstration Report')
+    styles = _make_styles()
+    story = []
 
-    pdf.setFillColor(NAVY)
-    pdf.roundRect(35, height - 145, width - 70, 112, 12, fill=1, stroke=0)
+    result = payload.get("result")
 
-    pdf.setFillColor(colors.white)
-    pdf.setFont('Helvetica-Bold', 21)
-    pdf.drawString(left, height - 75, 'MedVision AI')
+    if not isinstance(result, dict):
+        result = {}
 
-    pdf.setFont('Helvetica', 11)
-    pdf.drawString(left, height - 96, 'Medical Imaging Analysis — Demonstration Report')
+    prediction = (
+        payload.get("prediction")
+        or result.get("prediction")
+        or result.get("predicted_class")
+        or result.get("class_name")
+    )
 
-    pdf.setFillColor(colors.HexColor('#B8DDE5'))
-    pdf.setFont('Helvetica', 8)
-    pdf.drawString(left, height - 121, 'ACADEMIC PROTOTYPE  |  NOT FOR CLINICAL USE')
+    confidence = payload.get("confidence")
 
-    y = height - 178
+    if confidence is None:
+        confidence = result.get("confidence")
+        if confidence is None:
+            confidence = result.get("confidence_score")
 
-    pdf.setFillColor(NAVY)
-    pdf.setFont('Helvetica-Bold', 12)
-    pdf.drawString(left, y, '1. Session details')
+    result_status = result.get("status", "UNKNOWN")
+    model_name = result.get("model_name", "Not available")
 
-    y -= 19
+    # 1. Session details
+
+    story.append(Paragraph("1. Session details", styles["SectionHeading"]))
 
     details = [
-        ('Report generated', datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')),
-        ('Analysis ID', payload.get('analysis_code') or 'Not available'),
-        ('Imaging modality', payload.get('modality', 'Not specified')),
-        ('Analysis task', payload.get('task', 'Not specified')),
-        ('Uploaded filename', payload.get('filename') or 'Not provided'),
-        ('Processing status', 'DEMO ONLY — IMAGE VALIDATION'),
+        (
+            "Report generated",
+            datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
+        ),
+        ("Analysis ID", _safe_text(payload.get("analysis_code"))),
+        ("Imaging modality", _safe_text(payload.get("modality"))),
+        ("Analysis task", _safe_text(payload.get("task"))),
+        ("Uploaded filename", _safe_text(payload.get("filename"))),
+        ("Processing status", _safe_text(payload.get("status"))),
+        ("Model execution status", _safe_text(result_status))
     ]
 
-    for label, value in details:
-        pdf.setFillColor(MUTED)
-        pdf.setFont('Helvetica', 9)
-        pdf.drawString(left, y, label)
+    story.append(_make_table(details, styles, [135, 355]))
+    story.append(Spacer(1, 10))
 
-        pdf.setFillColor(NAVY)
-        pdf.setFont('Helvetica-Bold', 9)
-        pdf.drawString(205, y, str(value)[:75])
+    # 2. Actual model output
 
-        y -= 17
-
-    y -= 7
-
-    pdf.setFillColor(NAVY)
-    pdf.setFont('Helvetica-Bold', 12)
-    pdf.drawString(left, y, '2. Analysis output')
-
-    y -= 19
-
-    pdf.setFillColor(TEAL)
-    pdf.setFont('Helvetica-Bold', 10)
-    pdf.drawString(left, y, 'No disease prediction was performed')
-
-    y -= 17
-
-    y = _draw_wrapped(
-        pdf,
-        'The current application build checks the uploaded image format and basic image readability. No trained medical imaging model was called. Therefore, no diagnosis, class probability, confidence score, affected-region finding or Grad-CAM explanation is available.',
-        left,
-        y,
-        right - left
+    story.append(
+        Paragraph("2. Actual model analysis output", styles["SectionHeading"])
     )
 
-    y -= 8
+    if result_status == "PREDICTION_GENERATED":
 
-    pdf.setFillColor(NAVY)
-    pdf.setFont('Helvetica-Bold', 12)
-    pdf.drawString(left, y, '3. Explainability and model status')
+        if prediction is not None:
+            story.append(
+                Paragraph("Model prediction", styles["BodyTextCustom"])
+            )
+            story.append(
+                Paragraph(
+                    _safe_text(prediction),
+                    styles["PredictionValue"]
+                )
+            )
+            story.append(Spacer(1, 6))
 
-    y -= 19
+        if confidence is not None:
+            story.append(_make_table(
+                [("Prediction confidence", _percentage(confidence))],
+                styles,
+                [135, 355]
+            ))
+            story.append(Spacer(1, 8))
 
-    y = _draw_wrapped(
-        pdf,
-        'Grad-CAM is not connected in this build. A genuine heatmap requires a compatible trained CNN and must be interpreted as a model-attribution visualization, not proof of disease or lesion location.',
-        left,
-        y,
-        right - left
-    )
+        probabilities = result.get("class_probabilities")
 
-    y -= 8
+        if isinstance(probabilities, dict) and probabilities:
+            story.append(
+                Paragraph(
+                    "Class-wise probabilities",
+                    styles["BodyTextCustom"]
+                )
+            )
 
-    pdf.setFillColor(NAVY)
-    pdf.setFont('Helvetica-Bold', 12)
-    pdf.drawString(left, y, '4. Safety and limitations')
+            probability_rows = [
+                (str(class_name), _percentage(probability))
+                for class_name, probability in probabilities.items()
+            ]
 
-    y -= 19
+            story.append(
+                _make_table(probability_rows, styles, [245, 245])
+            )
+            story.append(Spacer(1, 8))
 
-    pdf.setFillColor(PALE)
-    pdf.roundRect(left - 7, y - 83, right - left + 14, 91, 8, fill=1, stroke=0)
+        # Stroke segmentation results
 
-    pdf.setFillColor(NAVY)
-    y -= 7
+        if "processed_slices" in result:
+            story.append(
+                Paragraph(
+                    "Stroke segmentation statistics",
+                    styles["BodyTextCustom"]
+                )
+            )
 
-    for line in [
-        'This document is generated by an academic software prototype.',
-        'It is not a medical diagnosis, medical advice or a substitute for a clinician.',
-        'Do not use this report to make treatment, medication or triage decisions.',
-        'A qualified healthcare professional must interpret medical images and patient context.',
-    ]:
-        y = _draw_wrapped(
-            pdf,
-            line,
-            left + 5,
-            y,
-            right - left - 10,
-            size=8.5,
-            leading=13
+            stroke_rows = [
+                (
+                    "Model architecture",
+                    _safe_text(result.get("architecture"))
+                ),
+                (
+                    "Input modalities",
+                    ", ".join(result.get("input_modalities", []))
+                ),
+                (
+                    "Original volume dimensions",
+                    str(result.get("original_volume_shape", "Not available"))
+                ),
+                (
+                    "Processed slices",
+                    str(result.get("processed_slices"))
+                ),
+                (
+                    "Slices with predicted regions",
+                    str(result.get("slices_with_predicted_lesions"))
+                ),
+                (
+                    "Total predicted lesion pixels",
+                    str(result.get("total_lesion_pixels"))
+                ),
+                (
+                    "Predicted lesion pixel percentage",
+                    f"{result.get('lesion_pixel_percentage', 'Not available')}%"
+                ),
+                (
+                    "Segmentation threshold",
+                    str(result.get("threshold", "Not available"))
+                ),
+                (
+                    "Segmentation file",
+                    _safe_text(result.get("segmentation_file"))
+                ),
+                (
+                    "Segmentation saved",
+                    str(result.get("segmentation_saved", False))
+                )
+            ]
+
+            story.append(
+                _make_table(stroke_rows, styles, [190, 300])
+            )
+            story.append(Spacer(1, 8))
+
+        story.append(
+            Paragraph(
+                f"Model used: {_safe_text(model_name)}",
+                styles["SmallMuted"]
+            )
         )
 
-    pdf.setStrokeColor(colors.HexColor('#E3EAF0'))
-    pdf.line(left, 48, right, 48)
+    elif result_status == "MODEL_NOT_CONNECTED":
+        story.append(
+            Paragraph(
+                "No prediction was generated because the trained model "
+                "was not connected or available for this analysis.",
+                styles["BodyTextCustom"]
+            )
+        )
 
-    pdf.setFillColor(MUTED)
-    pdf.setFont('Helvetica', 7.5)
+    elif result_status == "PREDICTION_ERROR":
+        story.append(
+            Paragraph(
+                "The prediction process failed. No valid model prediction "
+                "is available for this analysis.",
+                styles["BodyTextCustom"]
+            )
+        )
 
-    pdf.drawString(
-        left,
-        35,
-        'MedVision AI  •  Academic prototype  •  Not for clinical use'
+    else:
+        story.append(
+            Paragraph(
+                "A completed model prediction is not available in the "
+                "stored analysis result.",
+                styles["BodyTextCustom"]
+            )
+        )
+
+    # 3. Explainability
+
+    story.append(
+        Paragraph(
+            "3. Explainability and additional outputs",
+            styles["SectionHeading"]
+        )
     )
 
-    pdf.drawRightString(right, 35, 'Generated automatically')
+    gradcam_note = result.get("gradcam_note")
 
-    pdf.save()
+    if gradcam_note:
+        story.append(
+            Paragraph(
+                f"Grad-CAM status: {gradcam_note}",
+                styles["BodyTextCustom"]
+            )
+        )
+    else:
+        story.append(
+            Paragraph(
+                "A Grad-CAM overlay was not included in the stored analysis "
+                "result. Therefore, this PDF cannot confirm whether a "
+                "heatmap was generated for this analysis.",
+                styles["BodyTextCustom"]
+            )
+        )
+
+    if result.get("note"):
+        story.append(
+            Paragraph(
+                f"Model note: {result.get('note')}",
+                styles["SmallMuted"]
+            )
+        )
+
+    story.append(Spacer(1, 8))
+
+    # 4. Safety and limitations
+
+    story.append(
+        Paragraph(
+            "4. Safety and limitations",
+            styles["SectionHeading"]
+        )
+    )
+
+    safety_text = [
+        "This document is generated by an academic medical imaging "
+        "software prototype.",
+        "Model predictions and segmentation outputs are research outputs, "
+        "not confirmed medical diagnoses.",
+        "Confidence scores and predicted regions do not establish the "
+        "presence, absence or severity of a disease.",
+        "Do not use this report to make treatment, medication or triage "
+        "decisions.",
+        "A qualified healthcare professional must interpret medical images "
+        "alongside clinical findings and patient history."
+    ]
+
+    safety_rows = [
+        [Paragraph(
+            text,
+            styles["BodyTextCustom"]
+        )]
+        for text in safety_text
+    ]
+
+    safety_table = Table(
+        safety_rows,
+        colWidths=[490]
+    )
+
+    safety_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), PALE),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5)
+    ]))
+
+    story.append(safety_table)
+
+    doc.build(
+        story,
+        onFirstPage=_header_footer,
+        onLaterPages=_header_footer
+    )
 
     return buffer.getvalue()
